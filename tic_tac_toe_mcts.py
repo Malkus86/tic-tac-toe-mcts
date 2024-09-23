@@ -394,8 +394,7 @@ class MCTS:
         if not node.is_root():
             if winner == "v":  # Draw
                 node.data.wins += 0.5
-            elif ((node.data.move.player == PLAYER["MACHINE"] and winner == "m") or
-                  (node.data.move.player == PLAYER["HUMAN"] and winner == "h")):
+            elif node.data.move.player == PLAYER["MACHINE"] and winner == "m":
                 node.data.wins += 1
 
             actions = actions + self.backpropagate(self.tree.get_parent(node), winner)["actions"]
