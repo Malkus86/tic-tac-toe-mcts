@@ -285,7 +285,7 @@ class MCTS:
         select_res = self.select(self.model.copy())
         expand_res = self.expand(select_res["node"], select_res["model"])
         simulation = self.simulate(expand_res["node"], expand_res["model"])
-        backpropagated = self.backpropagate(expand_res["node"], simulation["winner_icon"])
+        backpropagated = self.backpropagate(expand_res["node"], simulation["winner_icon"], simulation["is_draw"])
 
         return (select_res["actions"] + expand_res["actions"] + 
                 simulation["actions"] + backpropagated["actions"])
@@ -378,9 +378,11 @@ class MCTS:
                 break
 
         winner_icon = model.check_win()
+        is_draw = winner_icon == "v"
 
         return {
             "winner_icon": winner_icon,
+            "is_draw": is_draw,
             "actions": [{
                 "kind": "simulation",
                 "node_id": node.id,
@@ -389,7 +391,26 @@ class MCTS:
             }]
         }
 
-    def backpropagate(self, node, winner):
+    def backpropagate(self, node, winner, is_draw):
+        """Performs backpropagation in the Monte Carlo Tree Search.
+
+        Updates the statistics of nodes in the path from the given node
+        to the root of the tree based on the game result.
+
+        Args:
+            node (Node): The leaf node to start backpropagation from.
+            winner (str): The winner of the game. 'm' for machine win,
+                'h' for human win, 'v' for draw.
+            is_draw (bool): Indicates whether the game ended in a draw.
+
+        Returns:
+            dict: A dictionary containing a list of actions performed during
+            backpropagation. Each action is a dictionary with keys:
+            - 'kind': Always 'backpropagation'
+            - 'node_id': The ID of the node being updated
+            - 'old_data': Node's statistics before update
+            - 'new_data': Node's statistics after update
+        """
         actions = []
         current_node = node
 
@@ -403,14 +424,15 @@ class MCTS:
 
             current_node.data.simulations += 1
             
-            if winner == "m":  # AI勝利
+            if winner == "m":  # machine wins
                 current_node.data.wins += 1
-                print(f"Node {current_node.id}: AI wins, wins incremented to {current_node.data.wins}")
-            elif winner == "v":  # 平局
-                current_node.data.draws += 1
-                print(f"Node {current_node.id}: Draw, half wins incremented to {current_node.data.draws}")
-            else:  # 人類勝利
-                print(f"Node {current_node.id}: Human wins, wins and half wins not incremented")
+                # print(f"Node {current_node.id}: AI wins, wins incremented to {current_node.data.wins}")
+            elif is_draw:  # draw
+                if current_node.data.simulations > 0:  # only increment draws if the node has been visited
+                    current_node.data.draws += 1 
+            #         print(f"Node {current_node.id}: Draw, draws incremented to {current_node.data.draws}")
+            # else:  # human wins
+            #     print(f"Node {current_node.id}: Human wins, wins and draws not incremented")
 
             action["new_data"] = {
                 "new_wins": current_node.data.wins,
@@ -531,15 +553,14 @@ def draw_tree(root):
         board_str = format_board_for_graphviz(node.data.board_state)
         
         if node.is_root():
-            ucb_value = 0
+            label = f"{board_str}\\nRoot\\nV:{node.data.simulations}"
         else:
             parent = node.tree.get_parent(node)
             ucb_value = ucb1(node, parent)
-        
-        win_rate = (node.data.wins + node.data.draws) / node.data.simulations if node.data.simulations > 0 else 0
-        move_str = f"Move: {node.data.move.position}" if node.data.move else "Root"
-        label = f"{board_str}\\n{move_str}\\nV:{node.data.simulations}\\nW:{node.data.wins:.1f}\\nD:{node.data.draws:.1f}\\nWR:{win_rate:.2f}\\nUCB1:{ucb_value:.4f}"
-        #label = f"{board_str}\\n{move_str}\\nV:{node.data.simulations}\\nW:{node.data.wins:.1f}\\nWR:{win_rate:.2f}\\nUCB1:{ucb_value:.4f}"
+            win_rate = (node.data.wins + node.data.draws) / node.data.simulations if node.data.simulations > 0 else 0
+            move_str = f"Move: {node.data.move.position}"
+            label = f"{board_str}\\n{move_str}\\nV:{node.data.simulations}\\nW:{node.data.wins:.1f}\\nD:{node.data.draws:.1f}\\nWR:{win_rate:.2f}\\nUCB1:{ucb_value:.4f}"
+
         dot.node(node_id, label=label, fillcolor='white')
         if parent_id:
             dot.edge(parent_id, node_id)
