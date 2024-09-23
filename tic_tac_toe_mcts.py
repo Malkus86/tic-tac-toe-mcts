@@ -34,6 +34,8 @@ class TicTacToeBoard:
         Returns:
             bool: True if the move was successfully applied, False otherwise.
         """
+        if move is None:
+            return False  # No move to make
         if self.grid[move.position] == "":
             self.grid[move.position] = "h" if move.player == PLAYER["HUMAN"] else "m"
             self.current_player = get_other_player(self.current_player)
@@ -67,12 +69,17 @@ class TicTacToeBoard:
             [0, 3, 6], [1, 4, 7], [2, 5, 8],  # Columns
             [0, 4, 8], [2, 4, 6]  # Diagonals
         ]
+        # Check for win combinations
         for combo in win_combinations:
             if self.grid[combo[0]] != "" and self.grid[combo[0]] == self.grid[combo[1]] == self.grid[combo[2]]:
                 return self.grid[combo[0]]
-        if not self.has_legal_positions():
+
+        # Check for draw
+        if all(pos != "" for pos in self.grid):
             return "v"  # Draw
+
         return ""  # Game not over
+
 
     def copy(self):
         """Creates a deep copy of the current board state.
@@ -119,6 +126,7 @@ class GameNode:
         self.move = move
         self.board_state = board_state
         self.wins = 0
+        self.draws = 0
         self.simulations = 0
 
     def copy(self):
@@ -129,6 +137,7 @@ class GameNode:
         """
         new_node = GameNode(self.move.copy() if self.move else None, self.board_state.copy())
         new_node.wins = self.wins
+        new_node.draws = self.draws
         new_node.simulations = self.simulations
         return new_node
 
@@ -246,7 +255,7 @@ class MCTS:
         """
         self.model = model
         initial_board = model.copy()
-        root_node = GameNode(GameMove(get_other_player(player), None), initial_board)
+        root_node = GameNode(None, initial_board)  # Root node has no move
         self.tree = Tree(root_node)
 
     def run_search(self, iterations):
@@ -306,8 +315,11 @@ class MCTS:
 
         while not node.is_leaf() and self.is_fully_explored(node, model):
             node = self.get_best_child_ucb1(node)
-            model.make_move(node.data.move)
-            actions.append({"kind": "selection", "node_id": node.id, "old_data": None, "new_data": None})
+            if node.data.move is not None:
+                success = model.make_move(node.data.move)
+                if not success:
+                    print(f"Selection Error: Failed to make move at position {node.data.move.position}")
+                actions.append({"kind": "selection", "node_id": node.id, "old_data": None, "new_data": None})
 
         return {"node": node, "model": model, "actions": actions}
 
@@ -328,7 +340,9 @@ class MCTS:
                 random_pos = random.choice(legal_positions)
                 other_player = get_other_player(node.data.move.player if node.data.move else PLAYER["HUMAN"])
                 random_move = GameMove(other_player, random_pos)
-                model.make_move(random_move)
+                success = model.make_move(random_move)
+                if not success:
+                    print(f"Expansion Error: Failed to make move at position {random_move.position}")
 
                 new_board_state = model.copy()
                 expanded_node = self.tree.insert(GameNode(random_move, new_board_state), node)
@@ -355,8 +369,11 @@ class MCTS:
             current_player = get_other_player(current_player)
             legal_moves = model.get_legal_positions()
             if legal_moves:
-                random_move = GameMove(current_player, random.choice(legal_moves))
-                model.make_move(random_move)
+                random_pos = random.choice(legal_moves)
+                random_move = GameMove(current_player, random_pos)
+                success = model.make_move(random_move)
+                if not success:
+                    print(f"Simulation Error: Failed to make move at position {random_move.position}")
             else:
                 break
 
@@ -373,38 +390,40 @@ class MCTS:
         }
 
     def backpropagate(self, node, winner):
-        """Updates the statistics of all nodes in the path from the given node to the root.
-
-        Args:
-            node (Node): The starting node for backpropagation.
-            winner (str): The result of the simulation ('h', 'm', or 'v').
-
-        Returns:
-            dict: A dictionary containing a trace of the backpropagation actions.
-        """
         actions = []
-        action = {
-            "kind": "backpropagation",
-            "node_id": node.id,
-            "old_data": {"old_wins": node.data.wins, "old_visits": node.data.simulations},
-            "new_data": None
-        }
+        current_node = node
 
-        node.data.simulations += 1
-        if not node.is_root():
-            if winner == "v":  # Draw
-                node.data.wins += 0.5
-            elif node.data.move.player == PLAYER["MACHINE"] and winner == "m":
-                node.data.wins += 1
+        while True:
+            action = {
+                "kind": "backpropagation",
+                "node_id": current_node.id,
+                "old_data": {"old_wins": current_node.data.wins, "old_draws": current_node.data.draws, "old_visits": current_node.data.simulations},
+                "new_data": None
+            }
 
-            actions = actions + self.backpropagate(self.tree.get_parent(node), winner)["actions"]
+            current_node.data.simulations += 1
+            
+            if winner == "m":  # AI勝利
+                current_node.data.wins += 1
+                print(f"Node {current_node.id}: AI wins, wins incremented to {current_node.data.wins}")
+            elif winner == "v":  # 平局
+                current_node.data.draws += 1
+                print(f"Node {current_node.id}: Draw, half wins incremented to {current_node.data.draws}")
+            else:  # 人類勝利
+                print(f"Node {current_node.id}: Human wins, wins and half wins not incremented")
 
-        action["new_data"] = {
-            "new_wins": node.data.wins,
-            "new_visits": node.data.simulations
-        }
+            action["new_data"] = {
+                "new_wins": current_node.data.wins,
+                "new_draws": current_node.data.draws,
+                "new_visits": current_node.data.simulations
+            }
 
-        actions.insert(0, action)
+            actions.insert(0, action)
+
+            if current_node.is_root():
+                break
+
+            current_node = self.tree.get_parent(current_node)
 
         return {"actions": actions}
 
@@ -446,7 +465,7 @@ def ucb1(node, parent):
     """
     if node.data.simulations == 0:
         return float('inf')
-    exploitation = node.data.wins / node.data.simulations
+    exploitation = (node.data.wins + node.data.draws) / node.data.simulations
     exploration = math.sqrt(2 * math.log(parent.data.simulations) / node.data.simulations)
     return exploitation + exploration
 
@@ -497,7 +516,7 @@ def draw_tree(root):
     dot = Digraph(comment='MCTS Tree', engine='dot')
     dot.attr('node', shape='box', style='filled', fontsize='10', fontname='Courier')
 
-    def add_nodes_edges(node, parent_id=None, depth=0, max_depth=2):
+    def add_nodes_edges(node, parent_id=None, depth=0, max_depth=5):
         """Recursively adds nodes and edges to the Graphviz diagram.
 
         Args:
@@ -517,9 +536,10 @@ def draw_tree(root):
             parent = node.tree.get_parent(node)
             ucb_value = ucb1(node, parent)
         
-        win_rate = node.data.wins / node.data.simulations if node.data.simulations > 0 else 0
+        win_rate = (node.data.wins + node.data.draws) / node.data.simulations if node.data.simulations > 0 else 0
         move_str = f"Move: {node.data.move.position}" if node.data.move else "Root"
-        label = f"{board_str}\\n{move_str}\\nV:{node.data.simulations}\\nW:{node.data.wins:.1f}\\nWR:{win_rate:.2f}\\nUCB1:{ucb_value:.4f}"
+        label = f"{board_str}\\n{move_str}\\nV:{node.data.simulations}\\nW:{node.data.wins:.1f}\\nD:{node.data.draws:.1f}\\nWR:{win_rate:.2f}\\nUCB1:{ucb_value:.4f}"
+        #label = f"{board_str}\\n{move_str}\\nV:{node.data.simulations}\\nW:{node.data.wins:.1f}\\nWR:{win_rate:.2f}\\nUCB1:{ucb_value:.4f}"
         dot.node(node_id, label=label, fillcolor='white')
         if parent_id:
             dot.edge(parent_id, node_id)
@@ -555,7 +575,7 @@ def play_game():
             print(f"AI moved to position {result['move'].position}")
             draw_tree(mcts.tree.get(0))
 
-        mcts = MCTS(board)
+        mcts = MCTS(board)  # Reset the MCTS tree for the new board state
 
     print(format_board(board))
     winner = board.check_win()
