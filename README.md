@@ -2,7 +2,7 @@
 
 This project implements an AI player for the classic game of Tic-Tac-Toe using the Monte Carlo Tree Search (MCTS) algorithm. The AI provides a challenging opponent by utilizing MCTS to make intelligent decisions based on simulated game plays.
 
-![](./mcts_tree.svg)
+![](./mcts_tree.png)
 
 ## Features
 
