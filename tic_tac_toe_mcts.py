@@ -545,7 +545,7 @@ def draw_tree(root):
             node (Node): The current node to add.
             parent_id (str, optional): The ID of the parent node. Defaults to None.
             depth (int, optional): The current depth in the tree. Defaults to 0.
-            max_depth (int, optional): The maximum depth to visualize. Defaults to 2.
+            max_depth (int, optional): The maximum depth to visualize. Defaults to 5.
         """
         if depth > max_depth:
             return
