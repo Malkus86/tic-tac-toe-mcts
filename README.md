@@ -2,7 +2,7 @@
 
 This project implements an AI player for the classic game of Tic-Tac-Toe using the Monte Carlo Tree Search (MCTS) algorithm. The AI provides a challenging opponent by utilizing MCTS to make intelligent decisions based on simulated game plays.
 
-![](./mcts_tree.png)
+![](./mcts_tree.svg)
 
 ## Features
 
@@ -43,11 +43,21 @@ Follow the on-screen prompts to play the game. Enter your moves by selecting a p
 6 | 7 | 8
 ```
 
-The AI will use MCTS to determine its moves. After each AI turn, a visualization of the decision tree will be generated as a PDF file named 'mcts_tree.pdf' in the same directory. This PDF will show the current state of the MCTS tree, including node values and UCB1 scores.
+After each AI turn, a PDF visualization of the decision tree ('mcts_tree.pdf') will be generated in the same directory.
+
+## MCTS Tree Visualization
+
+Node information in the tree:
+- **Move**: AI's next move position
+- **V (Visits)**: Number of times this node was visited
+- **W (Wins)**: Number of wins from simulations starting at this node
+- **D (Draws)**: Number of draws from simulations starting at this node
+- **WR (Win Rate)**: Node evaluation metric
+- **UCB1**: Value used for child node selection
 
 ## Dependencies
 
 - Python 3.x
-- Graphviz (for generating the MCTS tree visualization PDF)
+- Graphviz
 
-Enjoy playing against the MCTS-powered AI and exploring the decision-making process through the generated PDFs!
+Enjoy playing against the MCTS AI and exploring its decision-making process through the generated PDFs!
